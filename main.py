@@ -7,11 +7,10 @@ import glob
 import os
 
 def ceil_time_to_minute(time):
-    """Ceil the time to the nearest minute."""
     return time + pd.Timedelta(minutes=1) - pd.Timedelta(seconds=time.second, microseconds=time.microsecond)
 
 def load_file():
-    # set the file_path to the file that was the recently added.
+    # Read the latest CSV file from the MovementReports directory
     movement_reports_dir = 'MovementReports'
     csv_files = glob.glob(os.path.join(movement_reports_dir, '*.csv'))
     if not csv_files:
@@ -20,11 +19,13 @@ def load_file():
 
     print(f"Loading file: {file_path}\n")
 
+    # Specific file paths for testing
     # file_path = 'MovementReports\\StefanMovementReport17Apr25.csv'
     # file_path = 'MovementReports\\StefanMovementReportApr2025.csv' # 1-3 April missing (max data retention 38 days)
     # file_path = 'MovementReports\\StefanMovementReport29May2025.csv' # 29-31 May missing
+    file_path = 'MovementReports\\StefanMovementReport30May2025.csv' # 31 May missing
 
-    df = pd.read_csv(file_path)
+    df = pd.read_csv(file_path, encoding='latin1')
     return df
 
 def preprocessing(df):
@@ -41,8 +42,6 @@ def preprocessing(df):
 
     # Trip Numbering
     df['TripNumber'] = (df['VehicleStatus'] == 'Start up').cumsum()
-    # print(df[['VehicleStatus', 'DateTime', 'TripNumber']])
-    # print(f"Trip Number Count: {df['TripNumber'].nunique()}")
 
     return df
 
@@ -55,7 +54,8 @@ def no_drive_days(df, full_month=False):
         days_in_month = pd.Period(first_date, freq='M').days_in_month
         last_date = first_date + pd.Timedelta(days=days_in_month - 1)
     else: # Month-to-Date
-        first_date = df_no_drive['Date'].min()
+        # first_date = df_no_drive['Date'].min() # Report Start Date
+        first_date = df_no_drive['Date'].min().replace(day=1) # Month-to-Date
         last_date = df_no_drive['Date'].max()
     print(f"Report Dates: {first_date} - {last_date}")
 
@@ -75,7 +75,7 @@ def driving_violations(df, violation='Harsh Braking'):
     return len(df_braking) *8
 
 def get_speed_limit(lat, lon):
-    """Get the speed limit for a given latitude and longitude using HERE API."""
+    # Get the speed limit for a given latitude and longitude using HERE API.
     base_url = "https://revgeocode.search.hereapi.com/v1/revgeocode"
     params = {
         "at": f"{lat},{lon},50",
@@ -110,7 +110,7 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
             call_here_api_for_speedlimit = False
 
     speed_penalty_total = 0
-    for index, row in df_speed.iterrows():
+    for _, row in df_speed.iterrows():
         speed = row['MOBILESPEED']
 
         if call_here_api_for_speedlimit:
@@ -142,7 +142,6 @@ def night_time_driving(df):
     df_night_driving = df[((df['Hour'] >= 23) | (df['Hour'] <= 4.5)) & 
                         (df['VehicleStatus'] != 'Health Check; (Ignition off)')].copy()
         
-    # print(df_night_driving.head())
     print(f"Night Time Driving")
     night_penalty_total = 0
 
@@ -151,7 +150,7 @@ def night_time_driving(df):
     for trip in trip_nums:
         trip_df = df[df['TripNumber'] == trip]
 
-        # Find difference between startup and ignition off
+        # Find difference between "Start up" and "Ignition off"
         if len(trip_df) > 1:
             start_time = trip_df[trip_df['VehicleStatus'] == 'Start up']['DateTime'].min()
             end_time = trip_df[trip_df['VehicleStatus'] == 'Ignition off']['DateTime'].max()
@@ -183,15 +182,10 @@ def distance(df):
     return d
 
 def sheetname_lookup(df, dev=False):
-    sheetname_lookup = {
-        'JB 61 HF GP': 'Stefan',
-        '': 'Christiaan',
-        '': 'Derrick',
-    }
-    return 'DEV' if dev else sheetname_lookup.get(df['VehicleReg'].iloc[0], 'DEV')
+    return 'DEV' if dev else config.SHEETNAME_LOOKUP.get(df['VehicleReg'].iloc[0], 'DEV')
 
 def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
-    output_file = 'DriveTemplateDevelopment.xlsx' if sheetname == 'DEV' else 'DriveSummary.xlsx'
+    output_file = 'DriveTemplateDevelopmentPython.xlsm' if sheetname == 'DEV' else 'DriveSummaryPython.xlsx'
 
     try:
         wb = openpyxl.load_workbook(output_file)
@@ -205,10 +199,11 @@ def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'
         print(f"Sheet {sheetname} not found in the workbook.")
         return
 
-    ws['J24'] = drive_pen
-    ws['J25'] = night_pen
-    ws['J26'] = no_drive
-    ws['J27'] = dist
+    ws['J6'] = drive_pen
+    ws['J7'] = night_pen
+    ws['J8'] = no_drive
+    ws['J9'] = dist
+    ws['J14'] = pd.Timestamp.now().strftime('%Y/%m/%d')
 
     wb.save(output_file)
     wb.close()
@@ -216,22 +211,30 @@ def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'
     print(f"Data written to Excel successfully.")
 
 def main():
+    # Config
+    full_month = False
+    call_here_api_for_speedlimit = True
+    dev = False
+    save_to_excel = True
+
+    # Load and preprocess data
     df = load_file()
     df = preprocessing(df)
 
-    no_drive = no_drive_days(df, full_month=False)
+    no_drive = no_drive_days(df, full_month)
 
     drive_pen = 0
     drive_pen += driving_violations(df, violation='Harsh Braking')
     drive_pen += driving_violations(df, violation='Harsh Acceleration')
     drive_pen += driving_violations(df, violation='Harsh Cornering')
-    drive_pen += speed_violation(df, call_here_api_for_speedlimit=False)
+    drive_pen += speed_violation(df, call_here_api_for_speedlimit)
     
     night_pen = night_time_driving(df)
     dist = distance(df)
 
-    sheetname = sheetname_lookup(df, dev=True)
-    write_to_excel(drive_pen, night_pen, no_drive, dist, sheetname)
+    sheetname = sheetname_lookup(df, dev)
+    if save_to_excel:
+        write_to_excel(drive_pen, night_pen, no_drive, dist, sheetname)
 
 if main() == '__main__':
     main()
