@@ -17,14 +17,14 @@ def load_file():
         raise FileNotFoundError(f"No CSV files found in {movement_reports_dir}")
     file_path = max(csv_files, key=lambda f: os.path.getctime(os.path.abspath(f)))
 
-    print(f"Loading file: {file_path}\n")
-
     # Specific file paths for testing
     # file_path = 'MovementReports\\StefanMovementReport17Apr25.csv'
     # file_path = 'MovementReports\\StefanMovementReportApr2025.csv' # 1-3 April missing (max data retention 38 days)
     # file_path = 'MovementReports\\StefanMovementReport29May2025.csv' # 29-31 May missing
-    file_path = 'MovementReports\\StefanMovementReport30May2025.csv' # 31 May missing
+    # file_path = 'MovementReports\\StefanMovementReport30May2025.csv' # 31 May missing
+    # file_path = 'MovementReports\\StefanMovementReportMay2025.csv'
 
+    print(f"Loading file: {file_path}\n")
     df = pd.read_csv(file_path, encoding='latin1')
     return df
 
@@ -212,7 +212,7 @@ def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'
 
 def main():
     # Config
-    full_month = False
+    full_month = True
     call_here_api_for_speedlimit = True
     dev = False
     save_to_excel = True
