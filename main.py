@@ -45,20 +45,25 @@ def preprocessing(df):
 
     return df
 
-def no_drive_days(df, full_month=False):
-    df_no_drive = df.copy()
-    df_no_drive['Date'] = df_no_drive['DateTime'].dt.date
+def report_dates(df, full_month=False):
+    df_report_date = df.copy()
+    df_report_date['Date'] = df_report_date['DateTime'].dt.date
 
     if (full_month): # Full Month
-        first_date = df_no_drive['Date'].min().replace(day=1)
+        first_date = df_report_date['Date'].min().replace(day=1)
         days_in_month = pd.Period(first_date, freq='M').days_in_month
-        last_date = first_date + pd.Timedelta(days=days_in_month - 1)
-    else: # Month-to-Date
+        last_date = first_date + pd.Timedelta(days=days_in_month -1)
+    else: # Month-to-Date (Last day as in the Report)
         # first_date = df_no_drive['Date'].min() # Report Start Date
-        first_date = df_no_drive['Date'].min().replace(day=1) # Month-to-Date
-        last_date = df_no_drive['Date'].max()
-    print(f"Report Dates: {first_date} - {last_date}")
+        first_date = df_report_date['Date'].min().replace(day=1) # Month-to-Date
+        last_date = df_report_date['Date'].max()
+    print(f"Report Dates: {first_date} to {last_date}")
 
+    return first_date, last_date
+
+def no_drive_days(df, first_date, last_date):
+    df_no_drive = df.copy()
+    df_no_drive['Date'] = df_no_drive['DateTime'].dt.date
     df_no_drive = df_no_drive[df["VehicleStatus"] == 'Start up']
     df_no_drive = df_no_drive.drop_duplicates(subset=['Date'], keep='first')
 
@@ -184,7 +189,7 @@ def distance(df):
 def sheetname_lookup(df, dev=False):
     return 'DEV' if dev else config.SHEETNAME_LOOKUP.get(df['VehicleReg'].iloc[0], 'DEV')
 
-def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
+def write_to_excel(full_month, drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
     output_file = 'DriveTemplateDevelopmentPython.xlsm' if sheetname == 'DEV' else 'DriveSummaryPython.xlsx'
 
     try:
@@ -203,7 +208,7 @@ def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'
     ws['J7'] = night_pen
     ws['J8'] = no_drive
     ws['J9'] = dist
-    ws['J14'] = pd.Timestamp.now().strftime('%Y/%m/%d')
+    ws['J14'] = full_month
 
     wb.save(output_file)
     wb.close()
@@ -212,7 +217,7 @@ def write_to_excel(drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'
 
 def main():
     # Config
-    full_month = True
+    full_month = False
     call_here_api_for_speedlimit = True
     dev = False
     save_to_excel = True
@@ -221,7 +226,8 @@ def main():
     df = load_file()
     df = preprocessing(df)
 
-    no_drive = no_drive_days(df, full_month)
+    first_date, last_date = report_dates(df, full_month=full_month)
+    no_drive = no_drive_days(df, first_date, last_date)
 
     drive_pen = 0
     drive_pen += driving_violations(df, violation='Harsh Braking')
@@ -234,7 +240,7 @@ def main():
 
     sheetname = sheetname_lookup(df, dev)
     if save_to_excel:
-        write_to_excel(drive_pen, night_pen, no_drive, dist, sheetname)
+        write_to_excel(last_date, drive_pen, night_pen, no_drive, dist, sheetname)
 
 if main() == '__main__':
     main()
