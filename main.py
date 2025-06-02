@@ -189,7 +189,7 @@ def distance(df):
 def sheetname_lookup(df, dev=False):
     return 'DEV' if dev else config.SHEETNAME_LOOKUP.get(df['VehicleReg'].iloc[0], 'DEV')
 
-def write_to_excel(full_month, drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
+def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
     output_file = 'DriveTemplateDevelopmentPython.xlsm' if sheetname == 'DEV' else 'DriveSummaryPython.xlsx'
 
     try:
@@ -208,7 +208,7 @@ def write_to_excel(full_month, drive_pen=0, night_pen=0, no_drive=0, dist=0, she
     ws['J7'] = night_pen
     ws['J8'] = no_drive
     ws['J9'] = dist
-    ws['J14'] = full_month
+    ws['J14'] = last_date
 
     wb.save(output_file)
     wb.close()
