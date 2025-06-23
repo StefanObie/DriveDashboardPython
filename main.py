@@ -177,7 +177,8 @@ def night_time_driving(df):
 
             night_penalty_total += night_penalty 
             print(f"\tTrip Number: {trip}, Duration: {duration.components.hours}h:{duration.components.minutes:02d}m, Night Penalty: {night_penalty} points")
-
+            # print(trip_df[['DateTime', 'VehicleStatus']])
+            
     print(f"Night Time Driving Total: {night_penalty_total}\n")
     return night_penalty_total
 
