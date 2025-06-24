@@ -97,8 +97,11 @@ def get_speed_limit(lat, lon):
         data = response.json()
         if 'items' in data and len(data['items']) > 0:
             speed_limits = data['items'][0].get('navigationAttributes', {}).get('speedLimits', [])
-            if speed_limits and 'maxSpeed' in speed_limits[0]:
-                return speed_limits[0]['maxSpeed']
+            if speed_limits:
+                # Get all maxSpeed values and return the smallest one
+                max_speeds = [sl.get('maxSpeed') for sl in speed_limits if 'maxSpeed' in sl]
+                if max_speeds:
+                    return min(max_speeds)
     return None
 
 def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=60):
@@ -136,7 +139,7 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
                 penalty = 15
 
             speed_penalty_total += penalty
-            print(f"\tSpeed Violation: {speed} km/h, Speed Limit: {speedlimit} km/h, Penalty: {penalty} points")
+            print(f"\t{row['DateTime']} - Speed Violation: {speed} km/h, Speed Limit: {speedlimit} km/h, Penalty: {penalty} points")
 
     print(f"Speed Violation Total: {speed_penalty_total} Points\n")
     return speed_penalty_total
@@ -223,7 +226,7 @@ def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, shee
 def main():
     # Config
     full_month = False
-    call_here_api_for_speedlimit = False
+    call_here_api_for_speedlimit = True
     dev = False
     save_to_excel = True
 
