@@ -144,8 +144,12 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
 def night_time_driving(df):
     # Night Time Driving
     df['Hour'] = df['DateTime'].dt.hour
-    df_night_driving = df[((df['Hour'] >= 23) | (df['Hour'] <= 4.5)) & 
-                        (df['VehicleStatus'] != 'Health Check; (Ignition off)')].copy()
+    # Only include records between 23:00 and 04:30 (not greater than 04:30)
+    df_night_driving = df[
+        ((df['Hour'] >= 23) | 
+         ((df['Hour'] < 4) | ((df['Hour'] == 4) & (df['DateTime'].dt.minute <= 30)))) &
+        (df['VehicleStatus'] != 'Health Check; (Ignition off)')
+    ].copy()
         
     print(f"Night Time Driving")
     night_penalty_total = 0
@@ -219,7 +223,7 @@ def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, shee
 def main():
     # Config
     full_month = False
-    call_here_api_for_speedlimit = True
+    call_here_api_for_speedlimit = False
     dev = False
     save_to_excel = True
 
