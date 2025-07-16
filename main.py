@@ -225,7 +225,7 @@ def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, shee
 
 def main():
     # Config
-    full_month = False
+    full_month = True
     call_here_api_for_speedlimit = True
     dev = False
     save_to_excel = True
