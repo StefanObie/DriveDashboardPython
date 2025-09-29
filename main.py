@@ -91,7 +91,7 @@ def get_speed_limit(lat, lon):
     }
     
     url = f"{base_url}?{urllib.parse.urlencode(params)}"
-    print(f"Calling HERE API...")
+    print(f"\tCalling HERE API...")
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -119,7 +119,10 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
 
     speed_penalty_total = 0
     for _, row in df_speed.iterrows():
+        print(f"{row['DateTime'].month}/{row['DateTime'].day}/{row['DateTime'].year} {row['DateTime'].strftime('%I:%M:%S %p')} @ {row['Latitude']}, {row['Longitude']}")
+    
         speed = row['MOBILESPEED']
+        penalty = 0
 
         if call_here_api_for_speedlimit:
             speedlimit = get_speed_limit(row['Latitude'], row['Longitude'])
@@ -139,7 +142,8 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
                 penalty = 15
 
             speed_penalty_total += penalty
-            print(f"\t{row['DateTime']} - Speed Violation: {speed} km/h, Speed Limit: {speedlimit} km/h, Penalty: {penalty} points")
+            
+        print(f"\tSpeed Violation: {speed} km/h, Speed Limit: {speedlimit} km/h, Penalty: {penalty} points")
 
     print(f"Speed Violation Total: {speed_penalty_total} Points\n")
     return speed_penalty_total
@@ -225,7 +229,7 @@ def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, shee
 
 def main():
     # Config
-    full_month = True
+    full_month = False
     call_here_api_for_speedlimit = True
     dev = False
     save_to_excel = True
