@@ -6,16 +6,18 @@ import openpyxl
 import glob
 import os
 
+MILES_TO_KM = 1.60934
+
 def ceil_time_to_minute(time):
     return time + pd.Timedelta(minutes=1) - pd.Timedelta(seconds=time.second, microseconds=time.microsecond)
 
 def load_file():
-    # Read the latest CSV file from the MovementReports directory
-    movement_reports_dir = 'MovementReports'
-    csv_files = glob.glob(os.path.join(movement_reports_dir, '*.csv'))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV files found in {movement_reports_dir}")
-    file_path = max(csv_files, key=lambda f: os.path.getctime(os.path.abspath(f)))
+    # Read the latest XLS file from the MovementReports directory
+    movement_reports_dir = 'DetailedReports'
+    xls_files = glob.glob(os.path.join(movement_reports_dir, '*.xls*'))
+    if not xls_files:
+        raise FileNotFoundError(f"No XLS files found in {movement_reports_dir}")
+    file_path = max(xls_files, key=lambda f: os.path.getctime(os.path.abspath(f)))
 
     # Specific file paths for testing
     # file_path = 'MovementReports\\StefanMovementReport17Apr25.csv'
@@ -25,23 +27,29 @@ def load_file():
     # file_path = 'MovementReports\\StefanMovementReportMay2025.csv'
 
     print(f"Loading file: {file_path}\n")
-    df = pd.read_csv(file_path, encoding='latin1')
+    df = pd.read_excel(file_path)
+    # Handle merged cells by forward-filling NaN values
+    # df = df.fillna(method='ffill')
     return df
 
 def preprocessing(df):
-    # Remove empty columns
-    columns_to_remove = ["DriverID","SkillSet","MsgTypeId","LocationTolerance","STATUS1"]
-    df = df.drop(columns=columns_to_remove, errors='ignore')
+    # Remove the report header (first 17 rows)
+    df = df.iloc[17:].reset_index(drop=True)
+
+    # Keep columns - 2 (Date), 8 (Event), 11 (Location), 20 (Speed), 21 (Distance)
+    df = df[[df.columns[2], df.columns[8], df.columns[11], df.columns[20], df.columns[21]]]
+    df.columns = ['Date', 'Event', 'Location', 'Speed', 'Distance']
 
     # Split the 'Location' column into 'Longitude' and 'Latitude'
-    df[['Longitude', 'Latitude']] = df['Location'].str.extract(r'Long\s*:\s*([\d\.\-]+)\.\s*Lat\s*:\s*([\d\.\-]+)')
+    df[['Longitude', 'Latitude']] = df['Location'].str.extract(r'Long\s*:\s*([\d\,\-]+)\,\s*Lat\s*:\s*([\d\,\-]+)')
+    df[['Longitude', 'Latitude']] = df[['Longitude', 'Latitude']].replace(',', '.', regex=True).astype(float)
     df = df.drop(columns=['Location'], errors='ignore')
 
-    # Convert datetime columns to datetime objects 4/1/2025 4:00:26 AM
-    df['DateTime'] = pd.to_datetime(df['Report Group Date'], format='%m/%d/%Y %I:%M:%S %p', errors='coerce')
+    # Convert Date column to datetime objects (Format: 2025/08/25 18:24)
+    df['DateTime'] = pd.to_datetime(df['Date'], format='%Y/%m/%d %H:%M', errors='coerce')
 
     # Trip Numbering
-    df['TripNumber'] = (df['VehicleStatus'] == 'Start up').cumsum()
+    df['TripNumber'] = (df['Event'] == 'Start up').cumsum()
 
     return df
 
@@ -64,7 +72,7 @@ def report_dates(df, full_month=False):
 def no_drive_days(df, first_date, last_date):
     df_no_drive = df.copy()
     df_no_drive['Date'] = df_no_drive['DateTime'].dt.date
-    df_no_drive = df_no_drive[df["VehicleStatus"] == 'Start up']
+    df_no_drive = df_no_drive[df["Event"] == 'Start up']
     df_no_drive = df_no_drive.drop_duplicates(subset=['Date'], keep='first')
 
     num_no_drive_days = (last_date - first_date).days + 1 - len(df_no_drive)
@@ -72,7 +80,7 @@ def no_drive_days(df, first_date, last_date):
     return num_no_drive_days
 
 def driving_violations(df, violation='Harsh Braking'):
-    df_braking = df[df['VehicleStatus'] == violation]
+    df_braking = df[df['Event'] == violation]
     df_braking = df_braking.sort_values(by='DateTime') 
     df_braking = df_braking[~(df_braking['DateTime'].diff().dt.total_seconds().abs() <= 120)] # Remove false alarms for Harsh Braking
     print(f"{violation}: {len(df_braking)} ({len(df_braking) *8} Points)\n")
@@ -105,13 +113,13 @@ def get_speed_limit(lat, lon):
     return None
 
 def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=60):
-    df_speed = df[(df['VehicleStatus'] == 'Speed Violation') & 
-                (df['MOBILESPEED'] >= default_speed_limit+10)] # Everything under 70 km/h is not a violation
+    df_speed = df[(df['Event'] == 'Speed Violation') & 
+                (df['Speed'] >= default_speed_limit+10)] # Everything under 70 km/h is not a violation
     
     print(f"Speed Violations") # Heading
     
     if len(df_speed) > 10 and call_here_api_for_speedlimit: # Do not call HERE API if there are too many speed violations
-        print(df_speed[['DateTime', 'MOBILESPEED', 'Latitude', 'Longitude']])
+        print(df_speed[['DateTime', 'Speed', 'Latitude', 'Longitude']])
         confirm = input(f"There are {len(df_speed)} speed violation(s). Type y (yes) to continue with HERE API calls: ")
         if confirm.strip().lower() != 'y':
             print(f"Using default speed limit of {default_speed_limit} km/h.")
@@ -119,9 +127,9 @@ def speed_violation(df, call_here_api_for_speedlimit=False, default_speed_limit=
 
     speed_penalty_total = 0
     for _, row in df_speed.iterrows():
-        print(f"{row['DateTime'].month}/{row['DateTime'].day}/{row['DateTime'].year} {row['DateTime'].strftime('%I:%M:%S %p')} @ {row['Latitude']}, {row['Longitude']}")
-    
-        speed = row['MOBILESPEED']
+        print(f"{row['DateTime'].strftime('%Y/%m/%d %H:%M')} @ {row['Latitude']}, {row['Longitude']}")
+
+        speed = row['Speed']
         penalty = 0
 
         if call_here_api_for_speedlimit:
@@ -155,7 +163,7 @@ def night_time_driving(df):
     df_night_driving = df[
         ((df['Hour'] >= 23) | 
          ((df['Hour'] < 4) | ((df['Hour'] == 4) & (df['DateTime'].dt.minute <= 30)))) &
-        (df['VehicleStatus'] != 'Health Check; (Ignition off)')
+        (df['Event'] != 'Health Check; (Ignition off)')
     ].copy()
         
     print(f"Night Time Driving")
@@ -168,8 +176,8 @@ def night_time_driving(df):
 
         # Find difference between "Start up" and "Ignition off"
         if len(trip_df) > 1:
-            start_time = trip_df[trip_df['VehicleStatus'] == 'Start up']['DateTime'].min()
-            end_time = trip_df[trip_df['VehicleStatus'] == 'Ignition off']['DateTime'].max()
+            start_time = trip_df[trip_df['Event'] == 'Start up']['DateTime'].min()
+            end_time = trip_df[trip_df['Event'] == 'Ignition off']['DateTime'].max()
             duration = end_time - start_time
 
             # If time is between 23h and 4h30, add a penalty for each minute.
@@ -194,12 +202,9 @@ def night_time_driving(df):
     return night_penalty_total
 
 def distance(df):
-    d = df['MOBILEODO'].iloc[-1]
+    d = df.iloc[7, 4] * MILES_TO_KM
     print(f"Month-to-Date Distance: {d:.0f} km")
     return d
-
-def sheetname_lookup(df, dev=False):
-    return 'DEV' if dev else config.SHEETNAME_LOOKUP.get(df['VehicleReg'].iloc[0], 'DEV')
 
 def write_to_excel(last_date, drive_pen=0, night_pen=0, no_drive=0, dist=0, sheetname='DEV'):
     output_file = 'DriveTemplateDevelopmentPython.xlsm' if sheetname == 'DEV' else 'DriveSummaryPython.xlsx'
@@ -236,6 +241,7 @@ def main():
 
     # Load and preprocess data
     df = load_file()
+    dist = distance(df)
     df = preprocessing(df)
 
     first_date, last_date = report_dates(df, full_month=full_month)
@@ -248,11 +254,10 @@ def main():
     drive_pen += speed_violation(df, call_here_api_for_speedlimit)
     
     night_pen = night_time_driving(df)
-    dist = distance(df)
 
-    sheetname = sheetname_lookup(df, dev)
+    sheetname = 'DEV' if dev else 'Stefan'
     if save_to_excel:
         write_to_excel(last_date, drive_pen, night_pen, no_drive, dist, sheetname)
 
-if main() == '__main__':
+if __name__ == '__main__':
     main()
