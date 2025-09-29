@@ -6,8 +6,6 @@ import openpyxl
 import glob
 import os
 
-MILES_TO_KM = 1.60934
-
 def ceil_time_to_minute(time):
     return time + pd.Timedelta(minutes=1) - pd.Timedelta(seconds=time.second, microseconds=time.microsecond)
 
@@ -202,7 +200,7 @@ def night_time_driving(df):
     return night_penalty_total
 
 def distance(df):
-    d = df.iloc[7, 4] * MILES_TO_KM
+    d = df.iloc[7, 4]
     print(f"Month-to-Date Distance: {d:.0f} km")
     return d
 
