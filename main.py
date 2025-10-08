@@ -234,8 +234,10 @@ def main():
     # Config
     full_month = False
     call_here_api_for_speedlimit = True
-    dev = False
     save_to_excel = True
+    sheetname = 'Stefan'
+    # sheetname = 'Derrick'
+    # sheetname = 'Christiaan'
 
     # Load and preprocess data
     df = load_file()
@@ -253,7 +255,6 @@ def main():
     
     night_pen = night_time_driving(df)
 
-    sheetname = 'DEV' if dev else 'Stefan'
     if save_to_excel:
         write_to_excel(last_date, drive_pen, night_pen, no_drive, dist, sheetname)
 
