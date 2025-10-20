@@ -235,8 +235,8 @@ def main():
     full_month = False
     call_here_api_for_speedlimit = True
     save_to_excel = True
-    sheetname = 'Stefan'
-    # sheetname = 'Derrick'
+    # sheetname = 'Stefan'
+    sheetname = 'Derrick'
     # sheetname = 'Christiaan'
 
     # Load and preprocess data
