@@ -192,8 +192,8 @@ def night_time_driving(df):
                 t += pd.Timedelta(minutes=1)
             # print(night_penalty)
 
-            night_penalty_total += night_penalty 
-            print(f"\tTrip Number: {trip}, Duration: {duration.components.hours}h:{duration.components.minutes:02d}m, Night Penalty: {night_penalty} points")
+            night_penalty_total += night_penalty
+            print(f"\tDate: {start_time.strftime('%Y/%m/%d %H:%M')}, Trip Number: {trip}, Duration: {duration.components.hours}h:{duration.components.minutes:02d}m, Night Penalty: {night_penalty} points")
             # print(trip_df[['DateTime', 'VehicleStatus']])
             
     print(f"Night Time Driving Total: {night_penalty_total}\n")
